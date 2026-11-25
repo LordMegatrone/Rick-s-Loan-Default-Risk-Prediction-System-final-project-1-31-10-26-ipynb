@@ -1,0 +1,97 @@
+Consumer Loan Default Risk: Predictive Analytics & Underwriting Decision-Support Report
+Prepared For: Retail Credit Risk & Underwriting Leadership | Dataset: CSE bank data project 1.csv (n = 252,000) | Deployment: Human-in-the-Loop Streamlit Scoring Application
+
+Page 1: Business Problem, Dataset Profile & Exploratory Insights
+1. Business Problem & Analytical Objective
+Consumer lending portfolios face a structural trade-off between credit loss prevention and applicant approval volume. 
+When default incidence is concentrated within a minority segment of borrowers, manual underwriting teams struggle to separate high-risk applicants from creditworthy borrowers using single-variable rules alone, while rigid automated rejections risk turning away 
+viable customers (false positives). The objective of this Business Intelligence initiative is to identify key behavioral, demographic, and socioeconomic drivers of consumer loan default (Risk_Flag) and deploy a validated, interpretable machine learning decision-support tool that prioritizes human underwriting review rather than automating credit rejections.
+
+2. Dataset Overview & Integrity Audit
+The source dataset (CSE bank data project 1.csv) comprises 252,000 consumer loan applications across 13 attributes with zero missing values:
+
+Target Variable (Risk_Flag): Binary default indicator exhibiting substantial class imbalance—221,004 non-default applications (87.70%) versus 30,996 default applications (12.30%).
+
+Numeric Attributes (5 Features): Annual Income (mean 4,997,117, median 5,000,695, SD 2,878,311, range 10,310–9,999,938), Age (mean 49.95 yrs, median 50.0 yrs, range 21–79), total Experience (mean 10.08 yrs, range 0–20), CURRENT_JOB_YRS (mean 6.33 yrs, range 0–14), and CURRENT_HOUSE_YRS (mean 12.00 yrs, range 10–14).
+
+Categorical Attributes (6 Features) & Identifier (Id): Married/Single (2 levels), House_Ownership (3 levels), Car_Ownership (2 levels), Profession (51 roles), STATE (29 states), CITY (317 raw labels), and sequential row index Id (1–252,000). Across all 252,000 records, there are 42,007 unique borrower feature profiles reflecting recurring demographic/occupational cohorts.
+
+3. Top Exploratory Data Analysis (EDA) Insights
+Early Current-Job Tenure Is the Sharpest Behavioral Risk Signal: Borrowers in their current job for 0 to 2 years default at 15.65% (peaking at 17.05% in year 2), compared to 11.78% for borrowers with 3 or more years of current job tenure—a +3.87 percentage-point elevation in default risk.
+
+Young & Early-Career Borrowers Exhibit Higher Vulnerability: Applicants aged 21–30 experience a 14.47% default rate versus 11.69%–12.06% across older age brackets (31–79). Similarly, applicants with 0–2 years of total work experience default at 15.65%, declining steadily to 10.95% among borrowers with 16–20 years of experience.
+
+Asset Ownership & Household Stability Buffer Default Risk: Renters (92.0% of applicants) default at 12.56% compared to 8.98% among homeowners (-3.58 percentage points). Single applicants default at 12.53% versus 10.25% for married applicants, and non-car owners default at 12.82% versus 11.10% for car owners.
+
+High Dispersion Across Professions and Geographies: Default rates vary more than twofold across occupations—from 16.41% (Police_officer), 15.36% (Chartered_Accountant), and 15.21% (Army_officer) down to 8.15% (Technology_specialist) and 8.51% (Petroleum_Engineer). Across states with 
+𝑛
+≥
+1
+,
+000
+n≥1,000, default rates range from 16.71% (Kerala) and 15.44% (Madhya_Pradesh) down to 7.10% (Uttarakhand) and 9.00% (Punjab).
+
+Non-Linear Income Interactions: Univariate default rates remain nearly flat across raw income quartiles (12.79% in the lowest quartile vs. 12.63% in the highest quartile), demonstrating that repayment risk is governed by multi-way interactions between income, age, job stability, and regional cost of living rather than gross income alone.
+
+4. Data Preprocessing & Feature Engineering
+To prevent data leakage and expose non-linear risk patterns to predictive algorithms, a reproducible transformation pipeline was constructed:
+
+Leakage & Noise Removal: Dropped the sequential Id column to prevent tree splits from memorizing row order, and stripped bracketed reference artifacts (\[\d+\]) from 30 CITY labels (e.g., Kota[6] 
+→
+→ Kota, consolidating 317 raw strings into 316 canonical cities).
+
+Domain Feature Engineering: Created four financial and career-stability ratios:
+
+Income_per_Age (Income / Age): Normalizes earning power relative to borrower life stage.
+
+Job_to_Exp_Ratio (CURRENT_JOB_YRS / Experience): Measures employer retention relative to total career length (0.0 when Experience == 0).
+
+Exp_to_Age_Ratio (Experience / Age): Captures workforce attachment consistency.
+
+Stability_Score (CURRENT_JOB_YRS + CURRENT_HOUSE_YRS): Composite index of employment and residential permanence.
+
+Partitioning & Encoding: Applied a stratified 80/20 split (201,600 development rows for cross-validation; 50,400 untouched test rows). Linear models received StandardScaler + OneHotEncoder, while tree-based models used OneHotEncoder for low-cardinality fields 
+and OrdinalEncoder (with unknown-category fallback -1) for Profession, CITY, and STATE. All models incorporated balanced class/sample weighting to counter the 87.7% / 12.3% class imbalance.
+
+Page 2: Model Benchmarking, Operational Strategy & Limitations
+5. Model Comparison & Final Selection Justification
+Four supervised classification algorithms were benchmarked using 3-Fold Stratified Cross-Validation on the 80% development set (201,600 rows) across Accuracy, Precision, Recall, and F1-Score:
+
+Algorithm	Role	3-Fold CV Accuracy	3-Fold CV Precision	3-Fold CV Recall	3-Fold CV F1-Score	Untouched Test (n = 50,400)
+Logistic Regression	Linear Baseline	57.92% ± 0.23%	16.68% ± 0.08%	60.62% ± 0.19%	0.2617 ± 0.0010	—
+Decision Tree	Single Tree	82.85% ± 2.96%	41.01% ± 4.50%	84.52% ± 1.14%	0.5511 ± 0.0440	—
+Gradient Boosting	Boosted Trees	73.98% ± 0.38%	27.82% ± 0.34%	69.94% ± 0.23%	0.3980 ± 0.0036	—
+Random Forest (Selected)	Bagged Ensemble	89.61% ± 0.05%	55.62% ± 0.13%	76.79% ± 0.57%	0.6451 ± 0.0029	Acc: 89.30% | Prec: 54.62% | Rec: 76.85% | F1: 0.6386
+Trade-Off Analysis & Justification:
+
+Baseline Underfitting: Logistic Regression achieves only 0.2617 F1 (16.68% precision), confirming that linear boundaries cannot capture localized CITY 
+×
+× Profession 
+×
+× Income interactions.
+
+Variance vs. Precision Trade-Off: A single Decision Tree achieves high recall (84.52%) but suffers from severe fold-to-fold instability (± 4.50% precision SD) and over-flags safe borrowers (41.01% precision). Shallow Gradient Boosting (max_depth=5, 80 stages) underfits high-cardinality categorical splits (0.3980 F1) while requiring the longest runtime.
+
+Why Random Forest Was Selected: By aggregating 100 deep decorrelated trees (max_depth=22, class_weight='balanced_subsample'), Random Forest cuts cross-validation F1 variance by 93% (±0.0029) and boosts precision by +14.61 percentage points over
+the Decision Tree while preserving strong default capture (76.79% recall). On the untouched 50,400-row test set, the final serialized model (credit_risk_rf_artifact.joblib) achieves 89.30% Accuracy, 54.62% Precision, 76.85% Recall, 0.6386 F1-Score, 
+and 0.9306 ROC-AUC—correctly identifying 4,764 of 6,199 true defaults (TN = 40,243, FP = 3,958, FN = 1,435), with Income_per_Age (12.0%), Income (12.0%), CITY (11.4%), Exp_to_Age_Ratio (10.2%), and Profession (10.2%) serving as the top predictive drivers.
+
+6. Operational Recommendations
+Tiered Underwriting Triage via the Streamlit Decision-Support App: Route applications into three human-review tracks based on predicted default probability rather than binary auto-rejection:
+
+Low Risk (< 30% probability): Fast-track standard KYC and automated income verification.
+
+Moderate / Borderline Risk (30% – 55% probability): Require enhanced verification of payslips, bank statements, and existing debt obligations before approval.
+
+High Risk (≥ 55% probability): Escalate to senior underwriters to evaluate risk-mitigating structures (co-signers, collateral, or reduced principal limits).
+
+Targeted Probation & Liquidity Checks: Institute mandatory employment-confirmation checks for applicants with CURRENT_JOB_YRS < 3 (15.65% segment default rate) and explicit rent-to-income cash-flow reviews for rented housing applicants (12.56% segment default rate).
+
+Portfolio Monitoring & Quarterly Recalibration: Track realized default rates against predicted risk tiers quarterly and retrain the Joblib pipeline whenever regional macroeconomic shifts or occupational default rates drift by more than ±2.0 percentage points.
+
+7. Limitations & Governance Considerations
+Absence of Credit Bureau & Debt-Obligation Variables: The dataset lacks external credit scores, existing debt-to-income (DTI) ratios, requested loan size, and interest rate terms. Consequently, 45.38% of applicants flagged at the 0.50 cutoff (3,958 of 8,722 test flags) are false positives who did not default—reinforcing why human adjudication of external credit bureau files is mandatory before declining any applicant.
+
+Repeated Cohort Structure: Because the 252,000 rows map to 42,007 unique demographic/occupational profiles, predictions for brand-new city-profession combinations unseen during training rely on ordinal fallback encoding (-1) and should automatically trigger manual underwriter review.
+
+Fair-Lending & Proxy Governance: High model reliance on CITY, STATE, and Age can act as indirect proxies for protected socioeconomic groups. Periodic disparate-impact audits must be conducted across geographic and demographic segments to ensure equitable credit access.
